@@ -1,16 +1,19 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_marshmallow import Marshmallow
 
-from flask_migrate import Migrate
+def create_app():
+    app = Flask(__name__)
 
+    app.config.from_pyfile("config.py")
 
+    return app
 
-app = Flask(__name__)
+app = create_app()
 
-app.config.from_pyfile("config.py")
+try:
+    from src import views, models
+    models.db.create_all()
 
-from src import views, models
-app.app_context().push()
-# models.db.create_all()
-app.register_blueprint(views.pokemon_api)
+    app.register_blueprint(views.pokemon_api)
+except Exception as e:
+    import traceback
+    traceback.print_exc()

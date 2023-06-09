@@ -1,9 +1,12 @@
 import os
+from configparser import ConfigParser
 
-SECRET_KEY = "secret_cheat"
-SQLALCHEMY_DATABASE_URI = (
-    "postgresql+psycopg2://postgres:password@localhost:5432/pokemon_db"
-)
-SQLALCHEMY_TRACK_MODIFICATIONS = False
-BASE_URL = "http://127.0.0.1:5000"
-PAGE_LIMIT = 10000
+config = ConfigParser()
+config.read(os.path.join(os.path.dirname(__file__), '..', 'serverbase.cfg')) 
+
+DEBUG = config.getboolean('FLASK', 'DEBUG')
+BASE_URL = config.get('FLASK', 'BASE_URL')
+SECRET_KEY = config.get('FLASK', 'SECRET_KEY')
+MAX_PAGE_LIMIT = config.getint('FLASK', 'MAX_PAGE_LIMIT')
+SQLALCHEMY_TRACK_MODIFICATIONS = config.get('FLASK', 'SQLALCHEMY_TRACK_MODIFICATIONS')
+SQLALCHEMY_DATABASE_URI = config.get('FLASK', 'SQLALCHEMY_DATABASE_URI')

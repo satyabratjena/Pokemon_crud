@@ -2,11 +2,11 @@ import ast
 
 # Installed Imports
 from flask import Blueprint, request, url_for, jsonify
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.dialects.postgresql import insert
 
 # Custom imports
-from src import app
+from src import app, utils
 from src.models import db
 from src.models import Pokemon, PokemonSchema
 
@@ -79,7 +79,11 @@ def get_pokemons(pokemon_id=None):
     search_by_type_1 = request.args.get("search_by_type_1")
     search_by_type_2 = request.args.get("search_by_type_2")
     legendary_search = request.args.get("legendary_search")
+    #search_total = request.args.get("search_total")
+    generation = request.args.get("generation")
     name_prefix = request.args.get("name_prefix")
+    sort = request.args.get("sort", "name")
+    order = request.args.get("order", "asc")
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=10, type=int)
 
@@ -90,7 +94,8 @@ def get_pokemons(pokemon_id=None):
         if not query:
             raise PokemonException(f"{pokemon_id} doesn't exist", 404)
 
-    # convert the string search to upper case. so that while searching it will help to match with db. and if not the correct data then raise an error.
+    query = query.order_by(getattr(getattr(Pokemon, sort), order)())
+
     if search:
         query = query.filter(Pokemon.name.ilike(f"%{search}%"))
     if name_prefix:
@@ -103,30 +108,37 @@ def get_pokemons(pokemon_id=None):
     if legendary_search:
         legendary_search = ast.literal_eval(legendary_search)
         query = query.filter(Pokemon.legendary.is_(legendary_search))
+    if generation:
+        query = query.filter(Pokemon.generation == generation)
+
+    # if search_total:
+    #     query = query.filter(Pokemon.attack <= search_total)
 
     # Paginate the query
-    pokemons = query.paginate(page=page, per_page=per_page)
+    pokemons = query.paginate(page=page, per_page=per_page, error_out=False)
 
+    # serialize the data
     schema = PokemonSchema(many=True)
     serialize_pokemons = schema.dump(pokemons)
 
     if len(serialize_pokemons) == 0:
         raise NotFoundError(f"No Pokemon found in the list")
 
-    # if pokemons.has_next:
-    #     next_page = url_for("pokemon_api.get_pokemons", page=pokemons.next_num)
-    result = {
+    if pokemons.has_next:
+        next_page = url_for("pokemon_api.get_pokemons", page=pokemons.next_num, _external=True)
+    else:
+        next_page = None
+
+    return {
         "total": pokemons.total,
-        "page": page,
+        "page": pokemons.page,
         "per_page": per_page,
         "pokemons": serialize_pokemons,
-        # "next_page": next_page
-    }
+        "next_page": next_page
 
-    return jsonify(result), 200
+    }, 200
 
-    
-@pokemon_api.route("/creates", methods=["POST"])
+@pokemon_api.route("/", methods=["POST"])
 def create_pokemons(
     rank=None,
     name=None,
@@ -173,7 +185,7 @@ def create_pokemons(
             )
         if name.isalpha() != True:
             raise InvalidFormat
-
+        
         try:
             pokemon = Pokemon(
                 rank=rank,
@@ -196,12 +208,9 @@ def create_pokemons(
                 "success": True,
                 "message": f"Pokemon {pokemon.name} details added successfully",
             }, 200
-        except:
+        except(SQLAlchemyError, IntegrityError) as e:
             db.session.rollback()
-            return {
-                "success": False,
-                "error": f"Pokemon {pokemon.name} already exists",
-            }, 500
+            return {"success": False, "message": str(e)}, 500
 
     else:
         for item in pokemon_data:
@@ -236,14 +245,11 @@ def create_pokemons(
                 db.session.commit()
                 return {
                     "success": True,
-                    "message": f"{pokemon.name} Pokemon added successfully",
+                    "message": f"{len(pokemon_data)} Pokemon added successfully",
                 }
-            except:
+            except(SQLAlchemyError, IntegrityError) as e:
                 db.session.rollback()
-                return {
-                    "success": False,
-                    "error": f"Pokemon {pokemon.name} already exists",
-                }, 500
+                return {"success": False, "message": str(e)}, 500
 
     return {
         "success": False,
@@ -267,7 +273,7 @@ def update_pokemon(pokemon_id=None):
             raise NotFoundError("Pokemon not found")
 
         # Calling the updated function to update specific attributes
-        update_pokemon_attributes(pokemon, request.json)
+        utils.update_pokemon_attributes(pokemon, request.json)
     else:
         pokemon_data = request.json.get("pokemon")
 
@@ -278,7 +284,7 @@ def update_pokemon(pokemon_id=None):
         # Upsert command to insert or update
         stmt = insert(Pokemon).values(pokemon_data)
         stmt = stmt.on_conflict_do_update(
-            index_elements=[Pokemon.id],
+            index_elements=[Pokemon.id], #change to name
             set_={
                 "id": stmt.excluded.id,
                 "rank": stmt.excluded.rank,
@@ -304,27 +310,6 @@ def update_pokemon(pokemon_id=None):
         "message": "Pokemon data updated successfully"
         }
 
-
-def update_pokemon_attributes(pokemon, data):
-    existing_attributes = {
-        "name": pokemon.name,
-        "type_1": pokemon.type_1,
-        "type_2": pokemon.type_2,
-        "total": pokemon.total,
-        "hp": pokemon.hp,
-        "attack": pokemon.attack,
-        "sp_atk": pokemon.sp_atk,
-        "sp_def": pokemon.sp_def,
-        "speed": pokemon.speed,
-        "generation": pokemon.generation,
-        "legendary": pokemon.legendary,
-    }
-    for attribute in existing_attributes:
-        if attribute in data:
-            setattr(pokemon, attribute, existing_attributes[attribute])
-
-    db.session.add(pokemon)
-    db.session.commit()
 
 
 @pokemon_api.route("", methods=["DELETE"])
@@ -357,7 +342,7 @@ def delete_pokemon(pokemon_id=None):
             pokemon = Pokemon.query.filter_by(id=item_id).first()
 
             if not pokemon:
-                raise NotFoundError(f"No data found for pokemon id: {item_id}", 404)
+                raise NotFoundError(f"No pokemon id: {item_id} found", 404)
 
             db.session.delete(pokemon)
 
@@ -365,7 +350,7 @@ def delete_pokemon(pokemon_id=None):
 
     return {
         "status": True,
-        "message": f"Pokemon id deleted successfully",
+        "message": f"{len(pokemon_data)}Pokemon id deleted successfully",
     }, 200
 
 
