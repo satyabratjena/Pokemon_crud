@@ -20,3 +20,5 @@ def update_pokemon_attributes(pokemon, data):
 
     db.session.add(pokemon)
     db.session.commit()
+
+update_pokemon_attributes()

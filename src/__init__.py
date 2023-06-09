@@ -10,8 +10,7 @@ def create_app():
 app = create_app()
 
 try:
-    from src import views, models
-    models.db.create_all()
+    from src import views
 
     app.register_blueprint(views.pokemon_api)
 except Exception as e:
