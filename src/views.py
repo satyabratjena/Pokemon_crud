@@ -208,11 +208,6 @@ def create_pokemons():
 @pokemon_api.route("/", methods=["PUT", "POST"])
 def update_pokemons():
     """
-    This API method updates we need to pass the name as in the body as JSON format.
-    In the else case, we are using upsert command to insert
-    and update by changing the method POST/PUT.
-    """
-    """
     This API method updates the pokemon(s), using the JSON format. 
     We can pass the values in the body to be updates partially/fully.
     """
