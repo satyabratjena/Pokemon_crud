@@ -1,20 +1,11 @@
 # Installed imports
-from flask_marshmallow import Marshmallow
-from flask_sqlalchemy import SQLAlchemy
-from dataclasses import dataclass
 
-from flask_migrate import Migrate
+from dataclasses import dataclass
 
 
 # Custom imports
 from src import app
-
-db = SQLAlchemy(app)
-ma = Marshmallow(app)
-
-app.app_context().push()
-
-migrate = Migrate(app, db)
+from src import db, ma
 
 
 @dataclass
@@ -33,6 +24,15 @@ class Pokemon(db.Model):
     speed = db.Column(db.Integer, nullable=False)
     generation = db.Column(db.Integer, nullable=False)
     legendary = db.Column(db.Boolean, nullable=False)
+
+
+@dataclass
+class Department(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    record = db.Column(db.Integer)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    department = db.Column(db.String(100), nullable=True)
+    client_source = db.Column(db.String(100), nullable=True)
 
 
 class PokemonSchema(ma.Schema):

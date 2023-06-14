@@ -1,5 +1,6 @@
 from src.models import db
 
+
 def update_pokemon_attributes(pokemon, data):
     existing_attributes = {
         "name": pokemon.name,
@@ -20,5 +21,3 @@ def update_pokemon_attributes(pokemon, data):
 
     db.session.add(pokemon)
     db.session.commit()
-
-update_pokemon_attributes()
